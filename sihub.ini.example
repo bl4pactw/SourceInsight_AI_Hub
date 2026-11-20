@@ -1,0 +1,25 @@
+; SI AI Hub 設定檔 —— 複製成 sihub.ini，放在 sihub.exe 同一目錄
+; 每次觸發都會重新讀取，修改後不需重啟 hub。
+; 本檔請只放 ASCII（Windows INI API 會以系統 ANSI 編碼讀取）；中文範本請寫在範本檔。
+
+[general]
+; 1 = 在 exe 目錄寫 sihub.log（除錯用）
+log=0
+; 範本檔：相對於 exe 目錄，或絕對路徑（UTF-8）
+templates=sihub_templates.txt
+; 1 = 顯示系統匣圖示（右鍵：編輯範本 / 設定 / log、開啟資料夾、結束）
+tray_icon=1
+
+[paths]
+; SI 看到的 Windows 路徑前綴 -> VS Code Remote / Claude 看到的 Linux 路徑前綴
+; 例：Z:\sdk\foo.c -> /home/bl4/work/sdk/foo.c
+win_prefix=Z:\
+linux_prefix=/home/bl4/work
+
+[target]
+; {prompt} 會被替換為 URL-encoded 的 prompt
+uri=vscode://anthropic.claude-code/open?prompt={prompt}
+; 1 = 同時把 prompt 放進剪貼簿（URI 預填失敗時可直接 Ctrl+V）
+copy_to_clipboard=1
+; 1 = 不真的開 URI，只寫 log（搭配 log=1 驗證設定）
+dry_run=0
