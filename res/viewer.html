@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<title>SI AI Hub</title>
+<style>
+:root {
+	--bg: #ffffff;
+	--fg: #1f2328;
+	--muted: #656d76;
+	--border: #d0d7de;
+	--subtle: #f6f8fa;
+	--accent: #0969da;
+	--code-bg: #f6f8fa;
+	--toolbar: #f6f8fa;
+	--toast: #1f2328;
+	--toast-fg: #ffffff;
+	--line-no: #8c959f;
+}
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #0d1117;
+		--fg: #e6edf3;
+		--muted: #8d96a0;
+		--border: #30363d;
+		--subtle: #161b22;
+		--accent: #4493f8;
+		--code-bg: #161b22;
+		--toolbar: #161b22;
+		--toast: #e6edf3;
+		--toast-fg: #0d1117;
+		--line-no: #6e7681;
+	}
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); }
+body { font: 15px/1.6 "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", system-ui, sans-serif; display: flex; flex-direction: column; }
+#toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--toolbar); border-bottom: 1px solid var(--border); flex: 0 0 auto; user-select: none; }
+#title { flex: 1 1 auto; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.segmented button { border: 0; border-radius: 0; }
+.segmented button + button { border-left: 1px solid var(--border); }
+button { font: inherit; font-size: 13px; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button[aria-pressed="true"] { background: var(--accent); color: #ffffff; }
+#content { flex: 1 1 auto; overflow: auto; }
+#view { max-width: 980px; margin: 0 auto; padding: 16px 28px 48px; }
+#source { display: none; margin: 0; padding: 12px 0 48px; font: 13px/1.55 "Cascadia Mono", Consolas, "MingLiU", monospace; counter-reset: line; }
+body.source-mode #view { display: none; }
+body.source-mode #source { display: block; }
+.line { white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; padding: 0 16px 0 64px; position: relative; min-height: 1.55em; }
+.line::before { counter-increment: line; content: counter(line); position: absolute; left: 0; width: 48px; text-align: right; color: var(--line-no); user-select: none; }
+#view h1, #view h2, #view h3 { border-bottom: 1px solid var(--border); padding-bottom: .3em; margin: 1.4em 0 .6em; line-height: 1.25; }
+#view h1 { font-size: 1.8em; }
+#view h2 { font-size: 1.4em; }
+#view h3 { font-size: 1.15em; border-bottom: 0; }
+#view p, #view ul, #view ol, #view table, #view pre, #view blockquote { margin: 0 0 1em; }
+#view a { color: var(--accent); }
+#view code { font: 0.88em "Cascadia Mono", Consolas, "MingLiU", monospace; background: var(--code-bg); padding: .15em .35em; border-radius: 4px; }
+#view pre { tab-size: 4; position: relative; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; overflow: auto; }
+#view pre code { background: none; padding: 0; font-size: 13px; line-height: 1.5; }
+#view pre .copy-code { position: absolute; top: 6px; right: 6px; font-size: 12px; padding: 1px 8px; opacity: 0; }
+#view pre:hover .copy-code { opacity: 1; }
+#view table { border-collapse: collapse; display: block; overflow: auto; }
+#view th, #view td { border: 1px solid var(--border); padding: 5px 12px; vertical-align: top; }
+#view th { background: var(--subtle); }
+#view blockquote { color: var(--muted); border-left: 4px solid var(--border); padding: 0 1em; }
+#view hr { border: 0; border-top: 1px solid var(--border); margin: 1.5em 0; }
+#view li > input[type="checkbox"] { margin-right: .4em; }
+#empty { color: var(--muted); text-align: center; margin-top: 20vh; }
+#toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--toast); color: var(--toast-fg); padding: 6px 14px; border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+#toast.show { opacity: .92; }
+</style>
+</head>
+<body>
+<div id="toolbar">
+	<span id="title">SI AI Hub</span>
+	<span id="meta"></span>
+	<span class="segmented">
+		<button id="mode-view" aria-pressed="true" title="Ctrl+M">檢視</button>
+		<button id="mode-source" aria-pressed="false" title="Ctrl+M">原文</button>
+	</span>
+	<button id="copy-all" title="Ctrl+Shift+C">複製全部</button>
+</div>
+<div id="content">
+	<div id="view"><div id="empty">尚無回覆</div></div>
+	<div id="source"></div>
+</div>
+<div id="toast"></div>
+<script>
+"use strict";
+
+const state = { markdown: "", lines: [], lineOffsets: [], copyOverride: null };
+
+const viewElement = document.getElementById("view");
+const sourceElement = document.getElementById("source");
+const contentElement = document.getElementById("content");
+
+function postToHost(message) {
+	if (window.chrome && window.chrome.webview)
+		window.chrome.webview.postMessage(String(message));
+}
+
+function showToast(text) {
+	const toast = document.getElementById("toast");
+
+	toast.textContent = text;
+	toast.classList.add("show");
+	clearTimeout(showToast.timer);
+	showToast.timer = setTimeout(() => toast.classList.remove("show"), 1600);
+}
+
+function parseSourcePos(element) {
+	const match = /^(\d+):(\d+)-(\d+):(\d+)$/.exec(element.getAttribute("data-sourcepos") || "");
+
+	if (!match)
+		return null;
+
+	return { startLine: +match[1], startColumn: +match[2], endLine: +match[3], endColumn: +match[4] };
+}
+
+function addCodeCopyButtons() {
+	viewElement.querySelectorAll("pre").forEach((pre) => {
+		const button = document.createElement("button");
+
+		button.className = "copy-code";
+		button.textContent = "複製";
+		button.addEventListener("click", (event) => {
+			const code = pre.querySelector("code");
+
+			event.stopPropagation();
+			state.copyOverride = { text: code ? code.textContent : pre.textContent, html: null };
+			document.execCommand("copy");
+			showToast("已複製程式碼");
+		});
+		pre.appendChild(button);
+	});
+}
+
+function renderSource(markdown) {
+	const fragment = document.createDocumentFragment();
+	let offset = 0;
+
+	state.lines = markdown.split("\n");
+	state.lineOffsets = [];
+	state.lines.forEach((text, index) => {
+		const line = document.createElement("div");
+
+		line.className = "line";
+		line.dataset.line = String(index + 1);
+		line.appendChild(document.createTextNode(text));
+		fragment.appendChild(line);
+		state.lineOffsets.push(offset);
+		offset += text.length + 1;
+	});
+	sourceElement.replaceChildren(fragment);
+}
+
+function render(data) {
+	state.markdown = data.markdown || "";
+	document.getElementById("title").textContent = data.title || "SI AI Hub";
+	document.getElementById("meta").textContent = data.meta || "";
+	viewElement.innerHTML = data.html || "<div id=\"empty\">尚無回覆</div>";
+	addCodeCopyButtons();
+	renderSource(state.markdown);
+	contentElement.scrollTop = 0;
+}
+
+function topVisibleLine() {
+	const top = contentElement.getBoundingClientRect().top;
+
+	if (document.body.classList.contains("source-mode")) {
+		for (const line of sourceElement.children) {
+			if (line.getBoundingClientRect().bottom > top)
+				return +line.dataset.line;
+		}
+
+		return 1;
+	}
+
+	return viewLineAt(top + 4);
+}
+
+function viewLineAt(clientY) {
+	const left = viewElement.getBoundingClientRect().left;
+	let element = null;
+	let position = null;
+	let offsetX;
+
+	for (offsetX = 40; offsetX < 400 && !element; offsetX += 40) {
+		element = document.elementFromPoint(left + offsetX, clientY);
+		if (element && !viewElement.contains(element))
+			element = null;
+	}
+
+	while (element && element !== viewElement) {
+		position = parseSourcePos(element);
+		if (position)
+			return position.startLine;
+
+		element = element.parentElement;
+	}
+
+	for (const candidate of viewElement.querySelectorAll("[data-sourcepos]")) {
+		if (candidate.getBoundingClientRect().bottom > clientY) {
+			position = parseSourcePos(candidate);
+			if (position)
+				return position.startLine;
+		}
+	}
+
+	return 1;
+}
+
+function scrollToLine(lineNumber) {
+	let target = null;
+
+	if (document.body.classList.contains("source-mode")) {
+		target = sourceElement.children[Math.max(0, lineNumber - 1)] || null;
+	}
+	else {
+		for (const element of viewElement.querySelectorAll("[data-sourcepos]")) {
+			const position = parseSourcePos(element);
+
+			if (position && position.startLine <= lineNumber && position.endLine >= lineNumber)
+				target = element;
+			else if (position && position.startLine > lineNumber)
+				break;
+		}
+	}
+
+	if (target)
+		target.scrollIntoView({ block: "start" });
+}
+
+function setMode(sourceMode) {
+	const line = topVisibleLine();
+
+	document.body.classList.toggle("source-mode", sourceMode);
+	document.getElementById("mode-view").setAttribute("aria-pressed", String(!sourceMode));
+	document.getElementById("mode-source").setAttribute("aria-pressed", String(sourceMode));
+	scrollToLine(line);
+}
+
+function blockOf(node) {
+	let element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+
+	while (element && element !== viewElement) {
+		if (element.hasAttribute("data-sourcepos") && !/^(TD|TH)$/.test(element.tagName))
+			return element;
+
+		element = element.parentElement;
+	}
+
+	return null;
+}
+
+function tableHeaderLines(block, firstLine) {
+	const table = block.closest("table");
+	const position = table ? parseSourcePos(table) : null;
+
+	if (!position || firstLine <= position.startLine + 1)
+		return [];
+
+	return state.lines.slice(position.startLine - 1, position.startLine + 1);
+}
+
+function selectionAsMarkdown(range) {
+	const startBlock = blockOf(range.startContainer);
+	const endBlock = blockOf(range.endContainer);
+	const startPosition = startBlock ? parseSourcePos(startBlock) : null;
+	const endPosition = endBlock ? parseSourcePos(endBlock) : null;
+	let firstLine;
+	let lastLine;
+	let lines;
+
+	if (!startPosition || !endPosition)
+		return null;
+
+	firstLine = Math.min(startPosition.startLine, endPosition.startLine);
+	lastLine = Math.max(startPosition.endLine, endPosition.endLine);
+	if (endPosition.endColumn === 0 && lastLine > firstLine)
+		lastLine--;
+
+	lines = state.lines.slice(firstLine - 1, lastLine);
+	while (lines.length && lines[lines.length - 1] === "")
+		lines.pop();
+
+	return { text: tableHeaderLines(startBlock, firstLine).concat(lines).join("\n"), firstLine: firstLine, lastLine: lastLine };
+}
+
+function sourceOffset(node, offset) {
+	let element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+
+	while (element && !element.classList.contains("line"))
+		element = element.parentElement;
+
+	if (!element)
+		return null;
+
+	if (node.nodeType === Node.ELEMENT_NODE)
+		offset = offset > 0 ? element.textContent.length : 0;
+
+	return state.lineOffsets[+element.dataset.line - 1] + offset;
+}
+
+function selectionAsSource(range) {
+	const start = sourceOffset(range.startContainer, range.startOffset);
+	const end = sourceOffset(range.endContainer, range.endOffset);
+
+	if (start === null || end === null)
+		return null;
+
+	return state.markdown.slice(Math.min(start, end), Math.max(start, end));
+}
+
+function selectionHtml(range) {
+	const container = document.createElement("div");
+
+	container.appendChild(range.cloneContents());
+	container.querySelectorAll(".copy-code").forEach((button) => button.remove());
+
+	return container.innerHTML;
+}
+
+function handleCopy(event) {
+	const selection = window.getSelection();
+	let markdown;
+	let range;
+
+	if (state.copyOverride) {
+		event.clipboardData.setData("text/plain", state.copyOverride.text);
+		if (state.copyOverride.html)
+			event.clipboardData.setData("text/html", state.copyOverride.html);
+
+		state.copyOverride = null;
+		event.preventDefault();
+		return;
+	}
+
+	if (!selection.rangeCount || selection.isCollapsed)
+		return;
+
+	range = selection.getRangeAt(0);
+
+	if (document.body.classList.contains("source-mode")) {
+		markdown = selectionAsSource(range);
+		if (markdown === null)
+			return;
+
+		event.clipboardData.setData("text/plain", markdown);
+		event.preventDefault();
+		return;
+	}
+
+	markdown = selectionAsMarkdown(range);
+	if (!markdown)
+		return;
+
+	event.clipboardData.setData("text/plain", markdown.text);
+	event.clipboardData.setData("text/html", selectionHtml(range));
+	event.preventDefault();
+	showToast("已複製第 " + markdown.firstLine + "–" + markdown.lastLine + " 行（Markdown）");
+}
+
+function copyAll() {
+	const container = document.createElement("div");
+
+	container.innerHTML = viewElement.innerHTML;
+	container.querySelectorAll(".copy-code").forEach((button) => button.remove());
+	state.copyOverride = { text: state.markdown, html: container.innerHTML };
+	document.execCommand("copy");
+	showToast("已複製全部（Markdown + 格式）");
+}
+
+function handleLinkClick(event) {
+	const link = event.target.closest("a[href]");
+
+	if (!link || (event.type === "auxclick" && event.button !== 1))
+		return;
+
+	event.preventDefault();
+	if (/^https?:\/\//i.test(link.href))
+		postToHost("open-url:" + link.href);
+}
+
+function handleKey(event) {
+	if (event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === "m") {
+		event.preventDefault();
+		setMode(!document.body.classList.contains("source-mode"));
+	}
+	else if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "c") {
+		event.preventDefault();
+		copyAll();
+	}
+	else if (event.key === "Escape") {
+		postToHost("close");
+	}
+}
+
+document.getElementById("mode-view").addEventListener("click", () => setMode(false));
+document.getElementById("mode-source").addEventListener("click", () => setMode(true));
+document.getElementById("copy-all").addEventListener("click", copyAll);
+document.addEventListener("copy", handleCopy);
+document.addEventListener("keydown", handleKey);
+viewElement.addEventListener("click", handleLinkClick);
+viewElement.addEventListener("auxclick", handleLinkClick);
+document.addEventListener("dragover", (event) => event.preventDefault());
+document.addEventListener("drop", (event) => event.preventDefault());
+
+if (window.chrome && window.chrome.webview)
+	window.chrome.webview.addEventListener("message", (event) => render(event.data));
+
+window.sihubRender = render;
+postToHost("ready");
+</script>
+</body>
+</html>

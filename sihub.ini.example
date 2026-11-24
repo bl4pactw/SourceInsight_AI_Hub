@@ -44,6 +44,14 @@ read_reply=1
 reply_timeout_s=900
 reply_poll_ms=2000
 
+[viewer]
+; 1 = 收到回覆時自動開啟檢視器（不搶焦點）；0 = 只跳通知
+auto_open=1
+; 1 = 檢視器可按 F12 開發者工具（修改 viewer.html 時用）
+devtools=0
+; 視窗位置與大小由 hub 自動寫入：x,y,寬,高,是否最大化
+;placement=
+
 [connections]
 ; 由系統匣 Connections → Connect to... 自動維護，也可手動編輯（不存密碼）
 ;conn1=user@host

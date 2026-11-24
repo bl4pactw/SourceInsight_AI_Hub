@@ -21,6 +21,6 @@ enum reply_status reply_begin(HWND window, int slot, const char *send_output);
 enum reply_status reply_on_timer(HWND window);
 enum reply_status reply_handle_check(HWND window, const struct sshconn_event *event);
 BOOL reply_available(void);
-void reply_open_last(void);
+void reply_show_last(BOOL activate);
 
 #endif

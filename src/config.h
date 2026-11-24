@@ -35,6 +35,8 @@ struct hub_config
 	BOOL tmux_read_reply;
 	int reply_timeout_s;
 	int reply_poll_ms;
+	BOOL viewer_auto_open;
+	BOOL viewer_devtools;
 };
 
 void config_init(void);

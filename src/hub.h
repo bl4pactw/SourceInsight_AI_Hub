@@ -11,7 +11,7 @@
 #include <windows.h>
 #include <wchar.h>
 
-#define HUB_VERSION         L"0.7.0"
+#define HUB_VERSION         L"0.8.0"
 #define HUB_TITLE           L"SI AI Hub"
 
 #define WM_HUB_SHOWMENU     (WM_APP + 1)

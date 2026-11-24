@@ -4,7 +4,7 @@
 #include "config.h"
 #include "hub_log.h"
 #include "tmuxcmd.h"
-#include "winutil.h"
+#include "viewer.h"
 
 #define REPLY_POLL_MIN_MS       500
 
@@ -152,7 +152,7 @@ BOOL reply_available(void)
 	return GetFileAttributesW(config_get()->reply_path) != INVALID_FILE_ATTRIBUTES;
 }
 
-void reply_open_last(void)
+void reply_show_last(BOOL activate)
 {
-	winutil_open_path(config_get()->reply_path);
+	viewer_show_file(config_get()->reply_path, activate);
 }

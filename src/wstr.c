@@ -141,7 +141,7 @@ void wstr_from_utf8(const char *text, wchar_t *dest, size_t dest_chars)
 	dest[dest_chars - 1] = 0;
 }
 
-static wchar_t *utf8_to_wstr(const char *utf8_text)
+wchar_t *wstr_utf8_to_wide(const char *utf8_text)
 {
 	wchar_t *wide_text;
 	int wide_chars;
@@ -202,7 +202,7 @@ wchar_t *wstr_read_utf8_file(const wchar_t *path, size_t max_bytes)
 	if (byte_count >= UTF8_BOM_LENGTH && memcmp(raw_bytes, UTF8_BOM, UTF8_BOM_LENGTH) == 0)
 		utf8_text += UTF8_BOM_LENGTH;
 
-	wide_text = utf8_to_wstr(utf8_text);
+	wide_text = wstr_utf8_to_wide(utf8_text);
 	free(raw_bytes);
 
 	return wide_text;

@@ -24,6 +24,7 @@ void wstr_copy(wchar_t *dest, size_t dest_chars, const wchar_t *source);
 void wstr_replace_char(wchar_t *text, wchar_t from_char, wchar_t to_char);
 const wchar_t *wstr_basename(const wchar_t *path);
 char *wstr_to_utf8(const wchar_t *text);
+wchar_t *wstr_utf8_to_wide(const char *text);
 void wstr_from_utf8(const char *text, wchar_t *dest, size_t dest_chars);
 wchar_t *wstr_read_utf8_file(const wchar_t *path, size_t max_bytes);
 

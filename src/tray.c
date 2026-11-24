@@ -126,7 +126,7 @@ static void run_tray_command(HWND hub_window, int command_id)
 	case TRAY_ID_EDIT_SETTINGS: winutil_open_path(config->ini_path); break;
 	case TRAY_ID_OPEN_LOG: winutil_open_path(config->log_path); break;
 	case TRAY_ID_OPEN_FOLDER: winutil_open_path(config->exe_dir); break;
-	case TRAY_ID_OPEN_REPLY: reply_open_last(); break;
+	case TRAY_ID_OPEN_REPLY: reply_show_last(TRUE); break;
 	case TRAY_ID_EXIT: PostMessageW(hub_window, WM_CLOSE, 0, 0); break;
 	default: break;
 	}
@@ -161,7 +161,7 @@ BOOL tray_handle_message(HWND hub_window, UINT message, LPARAM l_param)
 		else if (LOWORD(l_param) == WM_LBUTTONDBLCLK)
 			run_tray_command(hub_window, TRAY_ID_EDIT_TEMPLATES);
 		else if (LOWORD(l_param) == NIN_BALLOONUSERCLICK && g_balloon_opens_reply)
-			reply_open_last();
+			reply_show_last(TRUE);
 
 		return TRUE;
 	}

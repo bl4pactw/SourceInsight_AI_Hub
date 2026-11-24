@@ -16,6 +16,7 @@
 #define INI_SECTION_PATHS       L"paths"
 #define INI_SECTION_TARGET      L"target"
 #define INI_SECTION_TMUX        L"tmux"
+#define INI_SECTION_VIEWER      L"viewer"
 #define TARGET_NAME_MAX         16
 #define INI_KEY_LOG             L"log"
 #define INI_KEY_TEMPLATES       L"templates"
@@ -34,6 +35,8 @@
 #define INI_KEY_TMUX_READ_REPLY L"read_reply"
 #define INI_KEY_REPLY_TIMEOUT   L"reply_timeout_s"
 #define INI_KEY_REPLY_POLL      L"reply_poll_ms"
+#define INI_KEY_VIEWER_AUTO     L"auto_open"
+#define INI_KEY_VIEWER_DEVTOOLS L"devtools"
 
 static const wchar_t default_win_prefix[] = L"Z:\\";
 static const wchar_t default_linux_prefix[] = L"";
@@ -52,6 +55,8 @@ static const int default_tmux_submit_delay_ms = 300;
 static const int default_tmux_read_reply = 1;
 static const int default_reply_timeout_s = 900;
 static const int default_reply_poll_ms = 2000;
+static const int default_viewer_auto_open = 1;
+static const int default_viewer_devtools = 0;
 
 static const struct
 {
@@ -128,6 +133,8 @@ void config_load(void)
 	g_config.tmux_read_reply = GetPrivateProfileIntW(INI_SECTION_TMUX, INI_KEY_TMUX_READ_REPLY, default_tmux_read_reply, ini_path);
 	g_config.reply_timeout_s = GetPrivateProfileIntW(INI_SECTION_TMUX, INI_KEY_REPLY_TIMEOUT, default_reply_timeout_s, ini_path);
 	g_config.reply_poll_ms = GetPrivateProfileIntW(INI_SECTION_TMUX, INI_KEY_REPLY_POLL, default_reply_poll_ms, ini_path);
+	g_config.viewer_auto_open = GetPrivateProfileIntW(INI_SECTION_VIEWER, INI_KEY_VIEWER_AUTO, default_viewer_auto_open, ini_path);
+	g_config.viewer_devtools = GetPrivateProfileIntW(INI_SECTION_VIEWER, INI_KEY_VIEWER_DEVTOOLS, default_viewer_devtools, ini_path);
 	g_config.default_target = config_parse_target(target_name);
 	if (g_config.default_target == HUB_TARGET_DEFAULT)
 		g_config.default_target = HUB_TARGET_VSCODE;

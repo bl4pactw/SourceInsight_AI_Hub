@@ -7,3 +7,5 @@ build/
 *.res
 *.o
 last_reply.md
+dist/
+build-mingw/

@@ -1,0 +1,3 @@
+cmark-gfm 0.29.0.gfm.13 (GitHub fork of cmark, https://github.com/github/cmark-gfm), unmodified src/ and extensions/.
+Obtained from the cmarkgfm 2025.10.22 source distribution on PyPI (third_party/cmark and its pre-generated headers in generated/).
+Built as a static library: CMARK_GFM_STATIC_DEFINE, CMARK_GFM_EXTENSIONS_STATIC_DEFINE.

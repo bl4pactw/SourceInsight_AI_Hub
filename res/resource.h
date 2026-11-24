@@ -5,5 +5,6 @@
 #define IDD_PROMPT              200
 #define IDC_PROMPT_MESSAGE      201
 #define IDC_PROMPT_EDIT         202
+#define IDR_VIEWER_HTML         300
 
 #endif

@@ -366,8 +366,10 @@ static void report_reply_check(HWND owner, const struct sshconn_event *event, st
 	enum reply_status status = reply_handle_check(owner, event);
 
 	if (status == REPLY_RECEIVED) {
-		set_notice_detail(notice_out, L"Claude replied", event->name, L"Click to open last_reply.md");
+		set_notice_detail(notice_out, L"Claude replied", event->name, L"Click to view the reply");
 		notice_out->opens_reply = TRUE;
+		if (config_get()->viewer_auto_open)
+			reply_show_last(FALSE);
 	}
 	else {
 		sshui_notice_for_timer(status, notice_out);

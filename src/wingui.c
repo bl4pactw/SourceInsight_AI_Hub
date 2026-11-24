@@ -1,4 +1,5 @@
 #include "wingui.h"
+#include <objbase.h>
 #include "config.h"
 #include "hub_log.h"
 #include "ipc.h"
@@ -8,6 +9,7 @@
 #include "reply.h"
 #include "target.h"
 #include "tray.h"
+#include "viewer.h"
 #include "winutil.h"
 #include "wstr.h"
 #include "../res/resource.h"
@@ -199,6 +201,7 @@ static LRESULT CALLBACK hub_window_proc(HWND window, UINT message, WPARAM w_para
 			return 0;
 
 		hub_log(L"server quit");
+		viewer_shutdown();
 		sshconn_shutdown();
 		DestroyWindow(window);
 		return 0;
@@ -236,9 +239,14 @@ int wingui_run_server(HINSTANCE instance, const struct hub_request *initial_requ
 	HWND hub_window;
 	MSG message;
 
-	hub_window = create_hub_window(instance);
-	if (!hub_window)
+	if (FAILED(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED)))
 		return 1;
+
+	hub_window = create_hub_window(instance);
+	if (!hub_window) {
+		CoUninitialize();
+		return 1;
+	}
 
 	hub_log(L"server start v%ls", HUB_VERSION);
 	tray_init(hub_window);
@@ -252,6 +260,7 @@ int wingui_run_server(HINSTANCE instance, const struct hub_request *initial_requ
 	}
 
 	preprompt_free_templates();
+	CoUninitialize();
 
 	return 0;
 }

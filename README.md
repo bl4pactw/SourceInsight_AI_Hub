@@ -1,4 +1,4 @@
-# SI AI Hub — v0.7
+# SI AI Hub — v0.8
 
 Source Insight 4 熱鍵 → 游標處彈出選單 → 選 3 個範本之一 → VS Code（Remote）裡的 Claude Code 輸入框出現預填 prompt。全程無 console 視窗。
 
@@ -14,20 +14,23 @@ server ─ 選單 @ SI 文字游標 ─> 範本 ─> Z:\ → Linux 路徑 ─> p
 
 | 檔案 | 說明 |
 |---|---|
-| `sihub.exe` | 預編好的 x64 執行檔（MinGW、static、GUI subsystem） |
+| `dist/` | **部署用**：`sihub.exe`（x64、MinGW、static、GUI subsystem）、`WebView2Loader.dll`、範本、設定範例、`remote/`；整個資料夾內容複製到 `C:\Tools\SiHub\` 即可 |
 | `src/` | 原始碼（模組化 Win32 C，純 ASCII，見下方「程式結構」） |
 | `CLAUDE.md` | C 程式碼規範（Claude Code / Cowork 共用） |
-| `res/` | 圖示、對話框、manifest（`sihub.ico`、`sihub.rc`、`resource.h`、`sihub.manifest`） |
+| `res/` | 圖示、對話框、manifest、回覆檢視器頁面（`viewer.html`，編進 exe） |
 | `remote/` | 部署到 Linux 的回覆 hook（`stop_hook.sh`、`last_reply.py`、`install.sh`），由 hub 經 SSH 上傳；**請和 sihub.exe 放在同一資料夾** |
 | `third_party/libssh2/` | libssh2 1.11.1 原始碼（BSD-3-Clause，見其 `COPYING`），以 WinCNG 編譯，不需 OpenSSL |
+| `third_party/cmark-gfm/` | cmark-gfm 0.29.0.gfm.13（BSD-2-Clause 等，見 `COPYING`），Markdown → HTML |
+| `third_party/webview2/` | `WebView2Loader.dll`（x64/x86/arm64，Microsoft 簽章）與自產的最小 C 標頭 `webview2_c.h`；來源與 SHA256 見其 `README.txt` |
+| `tools/gen_webview2_header.py` | 產生 `webview2_c.h` 的腳本 |
 | `macros/SiHub.em` | SI4 巨集：`SiHub_Ask`、`SiHub_Quit` |
 | `sihub.ini.example` | 設定範例（路徑對應、目標 URI、範本檔位置） |
 | `sihub_templates.txt` | 選單範本（UTF-8，可增減，最多 9 個） |
-| `build.bat` / `build_mingw.sh` | MSVC / MinGW 建置（編譯 `src\*.c`） |
+| `CMakeLists.txt` / `cmake/` | CMake 建置（`build.bat`＝MSVC、`build_mingw.sh`＝MinGW 交叉編譯，兩者都輸出到 `dist/`） |
 
 ## 安裝（約 3 分鐘）
 
-1. 建 `C:\Tools\SiHub\`，放入 `sihub.exe`、`sihub_templates.txt`；複製 `sihub.ini.example` 為 `sihub.ini`，改 `[paths]`：
+1. 建 `C:\Tools\SiHub\`，把 `dist\` 裡的所有檔案（`sihub.exe`、`WebView2Loader.dll`、`sihub_templates.txt`、`remote\`…）複製進去；複製 `sihub.ini.example` 為 `sihub.ini`，改 `[paths]`：
    ```ini
    win_prefix=Z:\
    linux_prefix=/home/bl4/<NFS 匯出的 Linux 目錄>
@@ -82,7 +85,7 @@ server ─ 選單 @ SI 文字游標 ─> 範本 ─> Z:\ → Linux 路徑 ─> p
 
 ## 讀回 Claude 的回覆（tmux 目標）
 
-送到 tmux 的 prompt，hub 會等 Claude 回覆完成後取回 Markdown 原文，存成 exe 旁的 `last_reply.md`，並跳出通知「Claude replied」（點通知開啟；系統匣也有 **Open last reply**）。
+送到 tmux 的 prompt，hub 會等 Claude 回覆完成後取回 Markdown 原文，存成 exe 旁的 `last_reply.md`，自動開啟[回覆檢視器](#回覆檢視器viewer)，並跳出通知「Claude replied」（點通知帶到前景；系統匣也有 **Open last reply**）。
 
 **一次性安裝**：系統匣 → Connections → 連線 → **Install reply hook**，然後在遠端重新啟動 tmux 裡的 Claude（`exit` 後 `tmux new -A -s sihub claude`）。
 
@@ -96,6 +99,35 @@ server ─ 選單 @ SI 文字游標 ─> 範本 ─> Z:\ → Linux 路徑 ─> p
 - 超過 `reply_timeout_s` 沒等到會停止並通知；回覆仍可在 tmux 中查看
 - 未安裝 hook 時照常送出，通知會提醒安裝
 - 需要遠端有 `python3`
+
+## 回覆檢視器（Viewer）
+
+收到回覆時自動開啟檢視器視窗（不搶焦點，可設 `[viewer] auto_open=0` 關閉）；點通知或系統匣 **Open last reply** 會把它帶到前景。內容一律來自 `last_reply.md`，檔案照常保留。
+
+| 操作 | 動作 |
+|---|---|
+| **檢視** / **原文** 切換（`Ctrl+M`） | 渲染後的 Markdown ↔ 帶行號的原始 Markdown；切換時保持捲動位置 |
+| 檢視模式選取 → `Ctrl+C` | 複製**所選區塊對應的原始 Markdown 行**（表格只選幾列會自動補表頭）；提示「已複製第 X–Y 行」 |
+| 原文模式選取 → `Ctrl+C` | 逐字複製所選原文 |
+| **全部複製**（`Ctrl+Shift+C`） | 剪貼簿同時放 Markdown（純文字）與 HTML；貼到 Word/Outlook 有格式，貼到編輯器是 Markdown |
+| 程式碼區塊右上角 **複製** | 只複製該區塊的程式碼 |
+| 連結 | 以預設瀏覽器開啟（只允許 http/https） |
+| `Esc` / 關閉鈕 | 隱藏視窗（下次開啟立即顯示）；位置與大小記在 `sihub.ini` 的 `[viewer] placement` |
+
+- 需要 **Microsoft Edge WebView2 Runtime**（Windows 11 內建）與 exe 旁的 `WebView2Loader.dll`。缺少時退回用預設程式開啟 `last_reply.md`（原因寫在 log）。
+- WebView2 使用者資料放在 `%LOCALAPPDATA%\SiHub\WebView2`。
+- 安全：Markdown 以 cmark-gfm 安全模式轉換（不輸出原始 HTML、移除 `javascript:` 連結），頁面不載入任何外部資源。
+- 自訂頁面：把修改過的 `viewer.html` 放在 exe 旁即優先使用（除錯可設 `[viewer] devtools=1` 開 F12）。
+- 第一次使用前建議在檔案總管檢查 `WebView2Loader.dll` → 內容 → 數位簽章為 Microsoft Corporation。
+
+## 建置
+
+```
+build.bat          :: MSVC（VS 2019+ 的 x64 Native Tools 命令提示字元，需 CMake）
+sh build_mingw.sh  # Linux 上以 mingw-w64 交叉編譯（需 cmake、ninja）
+```
+
+兩者都把可部署檔案安裝到 `dist/`。
 
 ## SSH 連線（Connections）
 
@@ -123,6 +155,7 @@ server ─ 選單 @ SI 文字游標 ─> 範本 ─> Z:\ → Linux 路徑 ─> p
 | 右鍵 → Edit settings | 開啟 `sihub.ini` |
 | 右鍵 → Open log | 開啟 `sihub.log`（`log=1` 時才可用） |
 | 右鍵 → Open folder | 開啟 exe 所在資料夾 |
+| 右鍵 → Open last reply | 開啟回覆檢視器 |
 | 右鍵 → Connections | SSH 連線管理（見上節） |
 | 右鍵 → Exit | 結束常駐 hub（會先中斷所有 SSH 連線） |
 
@@ -141,6 +174,8 @@ main.c ── 命令列解析、決定 client / server
        ├─ target.c     prompt → 剪貼簿，再送到 VS Code（URI）或 tmux（經 sshconn）
        │    └─ tmuxcmd.c   產生遠端 tmux 送出 / 回覆檢查腳本並驗證、解析結果（不含 Win32 型別，可在 Linux 測試）
        ├─ reply.c      回覆等待：計時輪詢、逾時、寫 last_reply.md
+       │    └─ viewer.c    WebView2 檢視器視窗（COM 回呼以 C 實作、動態載入 loader、頁面 ↔ C 以 web message 溝通）
+       │         └─ mdrender.c  cmark-gfm 包裝：Markdown → 帶 data-sourcepos 的 HTML
        └─ winutil.c    MessageBox、ShellExecute、剪貼簿
        ├─ sshui.c      連線清單選單、密碼 / 主機金鑰對話框、結果顯示
        │    └─ sshconn.c   連線管理：每條連線一個 worker thread、工作佇列、清單存 ini
