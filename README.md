@@ -1,4 +1,4 @@
-# SI AI Hub — v0.5
+# SI AI Hub — v0.7
 
 Source Insight 4 熱鍵 → 游標處彈出選單 → 選 3 個範本之一 → VS Code（Remote）裡的 Claude Code 輸入框出現預填 prompt。全程無 console 視窗。
 
@@ -18,6 +18,7 @@ server ─ 選單 @ SI 文字游標 ─> 範本 ─> Z:\ → Linux 路徑 ─> p
 | `src/` | 原始碼（模組化 Win32 C，純 ASCII，見下方「程式結構」） |
 | `CLAUDE.md` | C 程式碼規範（Claude Code / Cowork 共用） |
 | `res/` | 圖示、對話框、manifest（`sihub.ico`、`sihub.rc`、`resource.h`、`sihub.manifest`） |
+| `remote/` | 部署到 Linux 的回覆 hook（`stop_hook.sh`、`last_reply.py`、`install.sh`），由 hub 經 SSH 上傳；**請和 sihub.exe 放在同一資料夾** |
 | `third_party/libssh2/` | libssh2 1.11.1 原始碼（BSD-3-Clause，見其 `COPYING`），以 WinCNG 編譯，不需 OpenSSL |
 | `macros/SiHub.em` | SI4 巨集：`SiHub_Ask`、`SiHub_Quit` |
 | `sihub.ini.example` | 設定範例（路徑對應、目標 URI、範本檔位置） |
@@ -64,6 +65,38 @@ server ─ 選單 @ SI 文字游標 ─> 範本 ─> Z:\ → Linux 路徑 ─> p
 - 預設 3 個範本都要求 Claude 先回報起始行內容，用來確認 Windows/Linux 兩端是同一份 code
 - 範本檔讀不到或沒有任何 `[標題]` 時，使用 `sihub.c` 內建的英文備援範本，選單頂端會顯示灰色提示
 
+## 送出目標：VS Code 或 tmux
+
+| 目標 | 行為 | 設定 |
+|---|---|---|
+| `vscode` | 開 `vscode://` 預填到 VS Code Claude，需自己按送出 | `[target] uri` |
+| `tmux` | 經 SSH 連線把 prompt 貼進遠端 tmux 裡的 Claude CLI，並按 Enter 送出 | `[tmux]` 區段 |
+
+- 預設目標：`sihub.ini` 的 `[target] default=vscode|tmux`；範本可用 `[標題] !tmux` 個別指定。選單每一項右側會顯示目標
+- tmux 使用前，在遠端（任何 bl4 的終端機）執行：`tmux new -A -s sihub claude`
+- `[tmux] connection=bl4@192.168.4.70`：該連線不在清單會自動加入；未連線會自動連線，prompt 排隊等連上後送出
+- **安全檢查**：送出前確認 tmux 視窗裡執行的是 `allowed_commands`（預設 `claude,node`）之一；若是 bash 等其他程式，拒絕送出，避免 prompt 被當成指令執行
+- prompt 以 stdin 傳送（tmux `load-buffer` → `paste-buffer -p` bracketed paste），引號、`$`、反引號都不會被 shell 解讀；多行 prompt 不會提前送出
+- `submit=0` 只貼上不送出；`submit_delay_ms` 調整貼上與 Enter 之間的等待
+- 送出成功顯示系統匣通知；失敗（找不到 session、視窗不是 Claude、連線失敗）跳出原因
+
+## 讀回 Claude 的回覆（tmux 目標）
+
+送到 tmux 的 prompt，hub 會等 Claude 回覆完成後取回 Markdown 原文，存成 exe 旁的 `last_reply.md`，並跳出通知「Claude replied」（點通知開啟；系統匣也有 **Open last reply**）。
+
+**一次性安裝**：系統匣 → Connections → 連線 → **Install reply hook**，然後在遠端重新啟動 tmux 裡的 Claude（`exit` 後 `tmux new -A -s sihub claude`）。
+
+運作方式：
+
+1. Linux 端 Claude Code 的 **Stop hook**（`~/.sihub/stop_hook.sh`）在每次回覆完成時執行；只有在 tmux 內（有 `$TMUX_PANE`）才記錄，並依 tmux session 分檔寫 `~/.sihub/stop/<session>.json`，所以 VS Code 等其他 Claude 對話不會干擾
+2. hub 送出前記下該檔時間戳，之後每 `reply_poll_ms` 輪詢；時間戳改變即代表回覆完成
+3. `~/.sihub/last_reply.py` 從對話紀錄取出「最後一則使用者提問之後的所有回覆文字」（排除工具呼叫、工具結果、thinking）
+
+- 安裝程式會備份 `~/.claude/settings.json`（`.sihub-backup-時間`），只新增 hook、不動其他設定；重複執行不會重複新增
+- 超過 `reply_timeout_s` 沒等到會停止並通知；回覆仍可在 tmux 中查看
+- 未安裝 hook 時照常送出，通知會提醒安裝
+- 需要遠端有 `python3`
+
 ## SSH 連線（Connections）
 
 系統匣右鍵 → **Connections** 管理常駐 SSH 連線（hub 內建 libssh2，不經 `ssh.exe`，不會閃視窗）。
@@ -105,7 +138,9 @@ main.c ── 命令列解析、決定 client / server
   └─ wingui.c     隱藏視窗、message loop、游標處範本選單、請求流程協調
        ├─ tray.c       系統匣圖示與右鍵選單
        ├─ preprompt.c  範本檔解析、Z:\ → Linux 路徑、佔位符替換 → prompt（不碰 UI）
-       ├─ target.c     prompt → 剪貼簿 + URI 編碼 + 開啟（不彈視窗，回傳結果）
+       ├─ target.c     prompt → 剪貼簿，再送到 VS Code（URI）或 tmux（經 sshconn）
+       │    └─ tmuxcmd.c   產生遠端 tmux 送出 / 回覆檢查腳本並驗證、解析結果（不含 Win32 型別，可在 Linux 測試）
+       ├─ reply.c      回覆等待：計時輪詢、逾時、寫 last_reply.md
        └─ winutil.c    MessageBox、ShellExecute、剪貼簿
        ├─ sshui.c      連線清單選單、密碼 / 主機金鑰對話框、結果顯示
        │    └─ sshconn.c   連線管理：每條連線一個 worker thread、工作佇列、清單存 ini

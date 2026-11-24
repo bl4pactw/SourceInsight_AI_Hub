@@ -2,6 +2,7 @@
 #include <shellapi.h>
 #include "config.h"
 #include "hub_log.h"
+#include "reply.h"
 #include "sshui.h"
 #include "winutil.h"
 #include "wstr.h"
@@ -19,9 +20,11 @@
 #define TRAY_ID_OPEN_LOG        203
 #define TRAY_ID_OPEN_FOLDER     204
 #define TRAY_ID_EXIT            205
+#define TRAY_ID_OPEN_REPLY      206
 
 static UINT g_taskbar_created_msg;
 static BOOL g_tray_icon_added;
+static BOOL g_balloon_opens_reply;
 
 static void fill_tray_data(HWND hub_window, NOTIFYICONDATAW *tray_data)
 {
@@ -99,6 +102,7 @@ static HMENU create_tray_menu(void)
 		AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
 	}
 
+	AppendMenuW(menu, MF_STRING | (reply_available() ? 0 : MF_GRAYED), TRAY_ID_OPEN_REPLY, L"Open last &reply");
 	AppendMenuW(menu, MF_STRING, TRAY_ID_EDIT_TEMPLATES, L"Edit &templates");
 	AppendMenuW(menu, MF_STRING, TRAY_ID_EDIT_SETTINGS, L"Edit &settings");
 	AppendMenuW(menu, MF_STRING | (config->log_enabled ? 0 : MF_GRAYED), TRAY_ID_OPEN_LOG, L"Open &log");
@@ -122,6 +126,7 @@ static void run_tray_command(HWND hub_window, int command_id)
 	case TRAY_ID_EDIT_SETTINGS: winutil_open_path(config->ini_path); break;
 	case TRAY_ID_OPEN_LOG: winutil_open_path(config->log_path); break;
 	case TRAY_ID_OPEN_FOLDER: winutil_open_path(config->exe_dir); break;
+	case TRAY_ID_OPEN_REPLY: reply_open_last(); break;
 	case TRAY_ID_EXIT: PostMessageW(hub_window, WM_CLOSE, 0, 0); break;
 	default: break;
 	}
@@ -155,6 +160,8 @@ BOOL tray_handle_message(HWND hub_window, UINT message, LPARAM l_param)
 			show_tray_menu(hub_window);
 		else if (LOWORD(l_param) == WM_LBUTTONDBLCLK)
 			run_tray_command(hub_window, TRAY_ID_EDIT_TEMPLATES);
+		else if (LOWORD(l_param) == NIN_BALLOONUSERCLICK && g_balloon_opens_reply)
+			reply_open_last();
 
 		return TRUE;
 	}
@@ -168,13 +175,14 @@ BOOL tray_handle_message(HWND hub_window, UINT message, LPARAM l_param)
 	return FALSE;
 }
 
-void tray_show_balloon(HWND hub_window, const wchar_t *title, const wchar_t *text)
+void tray_show_balloon(HWND hub_window, const wchar_t *title, const wchar_t *text, BOOL opens_reply)
 {
 	NOTIFYICONDATAW tray_data;
 
 	if (!g_tray_icon_added)
 		return;
 
+	g_balloon_opens_reply = opens_reply;
 	fill_tray_data(hub_window, &tray_data);
 	tray_data.uFlags = NIF_INFO;
 	tray_data.dwInfoFlags = NIIF_INFO;

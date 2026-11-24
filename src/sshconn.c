@@ -552,7 +552,7 @@ BOOL sshconn_exec_async(int slot, const char *command, const char *stdin_data, s
 	connection = &g_connections[slot];
 	EnterCriticalSection(&g_lock);
 
-	if (job->command && connection->state == SSHCONN_CONNECTED) {
+	if (job->command && (connection->state == SSHCONN_CONNECTED || connection->state == SSHCONN_CONNECTING)) {
 		if (connection->job_tail)
 			connection->job_tail->next = job;
 		else

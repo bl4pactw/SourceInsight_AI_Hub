@@ -5,6 +5,7 @@
 #include "preprompt.h"
 #include "sshconn.h"
 #include "sshui.h"
+#include "reply.h"
 #include "target.h"
 #include "tray.h"
 #include "winutil.h"
@@ -12,7 +13,7 @@
 #include "../res/resource.h"
 
 #define MENU_HEADER_MAX         400
-#define MENU_ITEM_MAX           (TEMPLATE_LABEL_MAX + 8)
+#define MENU_ITEM_MAX           (TEMPLATE_LABEL_MAX + 24)
 #define MENU_ID_HEADER          1
 #define MENU_ID_ERROR           2
 #define MENU_ID_TEMPLATE_BASE   100
@@ -68,7 +69,7 @@ static HMENU create_template_menu(const struct hub_request *request)
 		AppendMenuW(menu, MF_STRING | MF_GRAYED, MENU_ID_ERROR, load_error);
 
 	for (index = 0; index < preprompt_template_count(); index++) {
-		wstr_format(item_text, MENU_ITEM_MAX, L"&%d  %ls", index + 1, preprompt_template_label(index));
+		wstr_format(item_text, MENU_ITEM_MAX, L"&%d  %ls\t%ls", index + 1, preprompt_template_label(index), target_name(preprompt_template_target(index)));
 		AppendMenuW(menu, MF_STRING, MENU_ID_TEMPLATE_BASE + index, item_text);
 	}
 
@@ -108,10 +109,11 @@ static int pick_template(HWND hub_window, const struct hub_request *request, HWN
 
 static void handle_request(HWND hub_window, const struct hub_request *request)
 {
+	wchar_t error_text[TARGET_ERROR_MAX];
 	struct wide_buf prompt;
+	enum hub_target target;
 	HWND previous_foreground;
 	int template_index;
-	int shell_code;
 
 	previous_foreground = GetForegroundWindow();
 	config_load();
@@ -122,15 +124,12 @@ static void handle_request(HWND hub_window, const struct hub_request *request)
 	if (template_index == MENU_CANCELLED)
 		return;
 
-	hub_log(L"template=%d '%ls'", template_index + 1, preprompt_template_label(template_index));
+	target = preprompt_template_target(template_index);
+	hub_log(L"template=%d '%ls' target=%ls", template_index + 1, preprompt_template_label(template_index), target_name(target));
 	wide_buf_init(&prompt);
 
-	if (preprompt_build(template_index, request, &prompt) && !target_send(hub_window, prompt.chars, &shell_code)) {
-		winutil_show_error(L"Cannot open target URI (ShellExecute=%d).\n\n"
-						   L"Check that VS Code is installed and the vscode:// protocol is registered.\n"
-						   L"Prompt was %lscopied to the clipboard.",
-						   shell_code, config_get()->copy_to_clipboard ? L"" : L"NOT ");
-	}
+	if (preprompt_build(template_index, request, &prompt) && !target_send(hub_window, target, prompt.chars, error_text, TARGET_ERROR_MAX))
+		winutil_show_error(L"%ls\n\nPrompt was %lscopied to the clipboard.", error_text, config_get()->copy_to_clipboard ? L"" : L"NOT ");
 
 	wide_buf_free(&prompt);
 }
@@ -179,9 +178,19 @@ static LRESULT CALLBACK hub_window_proc(HWND window, UINT message, WPARAM w_para
 		return 0;
 
 	case WM_HUB_SSH_EVENT:
-		sshui_handle_event((struct sshconn_event *)l_param, &notice);
+		sshui_handle_event(window, (struct sshconn_event *)l_param, &notice);
 		if (notice.show)
-			tray_show_balloon(window, notice.title, notice.text);
+			tray_show_balloon(window, notice.title, notice.text, notice.opens_reply);
+
+		return 0;
+
+	case WM_TIMER:
+		if (w_param != REPLY_TIMER_ID)
+			break;
+
+		sshui_notice_for_timer(reply_on_timer(window), &notice);
+		if (notice.show)
+			tray_show_balloon(window, notice.title, notice.text, FALSE);
 
 		return 0;
 

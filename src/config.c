@@ -5,6 +5,8 @@
 #define INI_PATH_FMT            L"%ls\\sihub.ini"
 #define LOG_PATH_FMT            L"%ls\\sihub.log"
 #define KNOWN_HOSTS_PATH_FMT    L"%ls\\known_hosts"
+#define REPLY_PATH_FMT          L"%ls\\last_reply.md"
+#define REMOTE_DIR_PATH_FMT     L"%ls\\remote"
 #define SSH_KEY_DIR_PATH_FMT    L"%ls\\.ssh"
 #define USER_PROFILE_ENV        L"USERPROFILE"
 #define EXE_DIR_FILE_PATH_FMT   L"%ls\\%ls"
@@ -13,6 +15,8 @@
 #define INI_SECTION_GENERAL     L"general"
 #define INI_SECTION_PATHS       L"paths"
 #define INI_SECTION_TARGET      L"target"
+#define INI_SECTION_TMUX        L"tmux"
+#define TARGET_NAME_MAX         16
 #define INI_KEY_LOG             L"log"
 #define INI_KEY_TEMPLATES       L"templates"
 #define INI_KEY_TRAY_ICON       L"tray_icon"
@@ -21,6 +25,15 @@
 #define INI_KEY_URI             L"uri"
 #define INI_KEY_CLIPBOARD       L"copy_to_clipboard"
 #define INI_KEY_DRY_RUN         L"dry_run"
+#define INI_KEY_DEFAULT_TARGET  L"default"
+#define INI_KEY_TMUX_CONNECTION L"connection"
+#define INI_KEY_TMUX_SESSION    L"session"
+#define INI_KEY_TMUX_SUBMIT     L"submit"
+#define INI_KEY_TMUX_DELAY      L"submit_delay_ms"
+#define INI_KEY_TMUX_COMMANDS   L"allowed_commands"
+#define INI_KEY_TMUX_READ_REPLY L"read_reply"
+#define INI_KEY_REPLY_TIMEOUT   L"reply_timeout_s"
+#define INI_KEY_REPLY_POLL      L"reply_poll_ms"
 
 static const wchar_t default_win_prefix[] = L"Z:\\";
 static const wchar_t default_linux_prefix[] = L"";
@@ -30,6 +43,31 @@ static const int default_log_enabled = 0;
 static const int default_tray_icon = 1;
 static const int default_copy_to_clipboard = 1;
 static const int default_dry_run = 0;
+static const wchar_t default_target_name[] = L"vscode";
+static const wchar_t default_tmux_connection[] = L"";
+static const wchar_t default_tmux_session[] = L"sihub";
+static const wchar_t default_tmux_allowed_commands[] = L"claude,node";
+static const int default_tmux_submit = 1;
+static const int default_tmux_submit_delay_ms = 300;
+static const int default_tmux_read_reply = 1;
+static const int default_reply_timeout_s = 900;
+static const int default_reply_poll_ms = 2000;
+
+static const struct
+{
+	const wchar_t *name;
+	enum hub_target target;
+} target_name_tbl[] =
+{
+	{
+		.name = L"vscode",
+		.target = HUB_TARGET_VSCODE,
+	},
+	{
+		.name = L"tmux",
+		.target = HUB_TARGET_TMUX,
+	},
+};
 
 static struct hub_config g_config;
 
@@ -60,6 +98,8 @@ void config_init(void)
 	wstr_format(g_config.ini_path, MAX_PATH, INI_PATH_FMT, g_config.exe_dir);
 	wstr_format(g_config.log_path, MAX_PATH, LOG_PATH_FMT, g_config.exe_dir);
 	wstr_format(g_config.known_hosts_path, MAX_PATH, KNOWN_HOSTS_PATH_FMT, g_config.exe_dir);
+	wstr_format(g_config.reply_path, MAX_PATH, REPLY_PATH_FMT, g_config.exe_dir);
+	wstr_format(g_config.remote_dir, MAX_PATH, REMOTE_DIR_PATH_FMT, g_config.exe_dir);
 	if (GetEnvironmentVariableW(USER_PROFILE_ENV, user_profile, MAX_PATH))
 		wstr_format(g_config.ssh_key_dir, MAX_PATH, SSH_KEY_DIR_PATH_FMT, user_profile);
 }
@@ -68,6 +108,7 @@ void config_load(void)
 {
 	const wchar_t *ini_path = g_config.ini_path;
 	wchar_t template_setting[MAX_PATH];
+	wchar_t target_name[TARGET_NAME_MAX];
 
 	g_config.log_enabled = GetPrivateProfileIntW(INI_SECTION_GENERAL, INI_KEY_LOG, default_log_enabled, ini_path);
 	g_config.tray_icon_enabled = GetPrivateProfileIntW(INI_SECTION_GENERAL, INI_KEY_TRAY_ICON, default_tray_icon, ini_path);
@@ -78,6 +119,19 @@ void config_load(void)
 	GetPrivateProfileStringW(INI_SECTION_TARGET, INI_KEY_URI, default_uri_template, g_config.uri_template, URI_TEMPLATE_MAX, ini_path);
 	GetPrivateProfileStringW(INI_SECTION_GENERAL, INI_KEY_TEMPLATES, default_template_path, template_setting, MAX_PATH, ini_path);
 
+	GetPrivateProfileStringW(INI_SECTION_TARGET, INI_KEY_DEFAULT_TARGET, default_target_name, target_name, TARGET_NAME_MAX, ini_path);
+	GetPrivateProfileStringW(INI_SECTION_TMUX, INI_KEY_TMUX_CONNECTION, default_tmux_connection, g_config.tmux_connection, TMUX_CONNECTION_MAX, ini_path);
+	GetPrivateProfileStringW(INI_SECTION_TMUX, INI_KEY_TMUX_SESSION, default_tmux_session, g_config.tmux_session, TMUX_SESSION_MAX, ini_path);
+	GetPrivateProfileStringW(INI_SECTION_TMUX, INI_KEY_TMUX_COMMANDS, default_tmux_allowed_commands, g_config.tmux_allowed_commands, TMUX_COMMANDS_MAX, ini_path);
+	g_config.tmux_submit = GetPrivateProfileIntW(INI_SECTION_TMUX, INI_KEY_TMUX_SUBMIT, default_tmux_submit, ini_path);
+	g_config.tmux_submit_delay_ms = GetPrivateProfileIntW(INI_SECTION_TMUX, INI_KEY_TMUX_DELAY, default_tmux_submit_delay_ms, ini_path);
+	g_config.tmux_read_reply = GetPrivateProfileIntW(INI_SECTION_TMUX, INI_KEY_TMUX_READ_REPLY, default_tmux_read_reply, ini_path);
+	g_config.reply_timeout_s = GetPrivateProfileIntW(INI_SECTION_TMUX, INI_KEY_REPLY_TIMEOUT, default_reply_timeout_s, ini_path);
+	g_config.reply_poll_ms = GetPrivateProfileIntW(INI_SECTION_TMUX, INI_KEY_REPLY_POLL, default_reply_poll_ms, ini_path);
+	g_config.default_target = config_parse_target(target_name);
+	if (g_config.default_target == HUB_TARGET_DEFAULT)
+		g_config.default_target = HUB_TARGET_VSCODE;
+
 	resolve_template_path(template_setting);
 	hub_log_configure(g_config.log_path, g_config.log_enabled);
 }
@@ -85,4 +139,16 @@ void config_load(void)
 const struct hub_config *config_get(void)
 {
 	return &g_config;
+}
+
+enum hub_target config_parse_target(const wchar_t *name)
+{
+	size_t index;
+
+	for (index = 0; index < ARRAYSIZE(target_name_tbl); index++) {
+		if (!_wcsicmp(name, target_name_tbl[index].name))
+			return target_name_tbl[index].target;
+	}
+
+	return HUB_TARGET_DEFAULT;
 }

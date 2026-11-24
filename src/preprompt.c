@@ -8,11 +8,14 @@
 #define TEMPLATE_TRIM_CHARS     L" \t\n"
 #define LINE_NUMBER_TEXT_MAX    16
 #define LINUX_PATH_MAX          REQ_FILE_MAX
+#define TARGET_NAME_MAX         16
+#define TARGET_SUFFIX_MARK      L'!'
 
 struct prompt_template
 {
 	wchar_t label[TEMPLATE_LABEL_MAX];
 	wchar_t *body;
+	enum hub_target target;
 };
 
 static const struct
@@ -66,21 +69,58 @@ static void load_fallback_templates(void)
 	for (index = 0; index < fallback_count && index < TEMPLATE_MAX; index++) {
 		wstr_copy(g_templates[index].label, TEMPLATE_LABEL_MAX, fallback_template_tbl[index].label);
 		g_templates[index].body = _wcsdup(fallback_template_tbl[index].body);
+		g_templates[index].target = HUB_TARGET_DEFAULT;
 		g_template_count = index + 1;
 	}
 }
 
-static BOOL parse_template_header(const wchar_t *line, size_t line_length, wchar_t *label_out)
+static BOOL is_blank(wchar_t character)
 {
-	size_t label_length;
+	return character == L' ' || character == L'\t';
+}
 
-	while (line_length && (line[line_length - 1] == L' ' || line[line_length - 1] == L'\t'))
-		line_length--;
+static BOOL parse_target_suffix(const wchar_t *suffix, size_t suffix_length, enum hub_target *target_out)
+{
+	wchar_t name[TARGET_NAME_MAX];
 
-	if (line_length < 3 || line[0] != L'[' || line[line_length - 1] != L']')
+	while (suffix_length && is_blank(*suffix)) {
+		suffix++;
+		suffix_length--;
+	}
+
+	if (suffix_length < 2 || suffix[0] != TARGET_SUFFIX_MARK || suffix_length - 1 >= TARGET_NAME_MAX)
 		return FALSE;
 
-	label_length = line_length - 2;
+	wmemcpy(name, suffix + 1, suffix_length - 1);
+	name[suffix_length - 1] = 0;
+	*target_out = config_parse_target(name);
+
+	return *target_out != HUB_TARGET_DEFAULT;
+}
+
+static BOOL parse_template_header(const wchar_t *line, size_t line_length, wchar_t *label_out, enum hub_target *target_out)
+{
+	size_t close_index;
+	size_t label_length;
+
+	*target_out = HUB_TARGET_DEFAULT;
+	while (line_length && is_blank(line[line_length - 1]))
+		line_length--;
+
+	if (line_length < 3 || line[0] != L'[')
+		return FALSE;
+
+	close_index = line_length - 1;
+	while (close_index > 0 && line[close_index] != L']')
+		close_index--;
+
+	if (close_index < 2)
+		return FALSE;
+
+	if (close_index + 1 < line_length && !parse_target_suffix(line + close_index + 1, line_length - close_index - 1, target_out))
+		return FALSE;
+
+	label_length = close_index - 1;
 	if (label_length >= TEMPLATE_LABEL_MAX)
 		label_length = TEMPLATE_LABEL_MAX - 1;
 
@@ -90,10 +130,11 @@ static BOOL parse_template_header(const wchar_t *line, size_t line_length, wchar
 	return TRUE;
 }
 
-static void begin_template(const wchar_t *label)
+static void begin_template(const wchar_t *label, enum hub_target target)
 {
 	wstr_copy(g_templates[g_template_count].label, TEMPLATE_LABEL_MAX, label);
 	g_templates[g_template_count].body = NULL;
+	g_templates[g_template_count].target = target;
 	g_template_count++;
 }
 
@@ -130,6 +171,7 @@ static void parse_template_text(const wchar_t *file_text)
 {
 	struct wide_buf body_buf;
 	wchar_t label[TEMPLATE_LABEL_MAX];
+	enum hub_target target;
 	const wchar_t *line_start = file_text;
 	const wchar_t *line_end;
 	size_t line_length;
@@ -142,7 +184,7 @@ static void parse_template_text(const wchar_t *file_text)
 		if (line_length && line_start[line_length - 1] == L'\r')
 			line_length--;
 
-		if (parse_template_header(line_start, line_length, label)) {
+		if (parse_template_header(line_start, line_length, label, &target)) {
 			finish_template(&body_buf);
 
 			if (g_template_count >= TEMPLATE_MAX) {
@@ -150,7 +192,7 @@ static void parse_template_text(const wchar_t *file_text)
 				break;
 			}
 
-			begin_template(label);
+			begin_template(label, target);
 		}
 		else if (g_template_count > 0) {
 			append_template_line(&body_buf, line_start, line_length);
@@ -207,6 +249,15 @@ const wchar_t *preprompt_template_label(int index)
 		return L"";
 
 	return g_templates[index].label;
+}
+
+enum hub_target preprompt_template_target(int index)
+{
+
+	if (index < 0 || index >= g_template_count)
+		return HUB_TARGET_DEFAULT;
+
+	return g_templates[index].target;
 }
 
 const wchar_t *preprompt_load_error(void)

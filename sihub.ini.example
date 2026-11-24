@@ -17,12 +17,32 @@ win_prefix=Z:\
 linux_prefix=/home/bl4/work
 
 [target]
+; 預設送出目標：vscode（預填到 VS Code Claude）或 tmux（送進 tmux 裡的 Claude CLI 並送出）
+; 範本可用 [標題] !tmux 或 [標題] !vscode 個別覆寫
+default=vscode
 ; {prompt} 會被替換為 URL-encoded 的 prompt
 uri=vscode://anthropic.claude-code/open?prompt={prompt}
 ; 1 = 同時把 prompt 放進剪貼簿（URI 預填失敗時可直接 Ctrl+V）
 copy_to_clipboard=1
 ; 1 = 不真的開 URI，只寫 log（搭配 log=1 驗證設定）
 dry_run=0
+
+[tmux]
+; 使用哪條 SSH 連線（不在清單中會自動加入並連線）
+;connection=user@host
+; tmux session 名稱；在遠端先執行：tmux new -A -s sihub claude
+session=sihub
+; 1 = 貼上後按 Enter 送出；0 = 只貼上，讓你在終端機確認後再送
+submit=1
+; 貼上與 Enter 之間的等待（毫秒）
+submit_delay_ms=300
+; 安全檢查：視窗中執行的程式必須是其中之一才送出（避免貼進 bash 被當成指令執行）
+allowed_commands=claude,node
+; 1 = 送出後等待 Claude 回覆完成，存成 exe 旁的 last_reply.md（需先在 Connections 選單執行 Install reply hook）
+read_reply=1
+; 最多等待秒數 / 輪詢間隔（毫秒）
+reply_timeout_s=900
+reply_poll_ms=2000
 
 [connections]
 ; 由系統匣 Connections → Connect to... 自動維護，也可手動編輯（不存密碼）
