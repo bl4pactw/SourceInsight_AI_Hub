@@ -3,13 +3,14 @@
 #include "hub_log.h"
 #include "ipc.h"
 #include "preprompt.h"
+#include "sshconn.h"
+#include "sshui.h"
 #include "target.h"
 #include "tray.h"
 #include "winutil.h"
 #include "wstr.h"
 #include "../res/resource.h"
 
-#define WM_HUB_SHOWMENU         (WM_APP + 1)
 #define MENU_HEADER_MAX         400
 #define MENU_ITEM_MAX           (TEMPLATE_LABEL_MAX + 8)
 #define MENU_ID_HEADER          1
@@ -155,6 +156,7 @@ static void run_pending_request(HWND hub_window)
 
 static LRESULT CALLBACK hub_window_proc(HWND window, UINT message, WPARAM w_param, LPARAM l_param)
 {
+	struct sshui_notice notice;
 	struct hub_request request;
 
 	if (tray_handle_message(window, message, l_param))
@@ -172,8 +174,23 @@ static LRESULT CALLBACK hub_window_proc(HWND window, UINT message, WPARAM w_para
 		run_pending_request(window);
 		return 0;
 
+	case WM_HUB_SSH_PROMPT:
+		sshui_handle_prompt(window, (struct sshconn_prompt *)l_param);
+		return 0;
+
+	case WM_HUB_SSH_EVENT:
+		sshui_handle_event((struct sshconn_event *)l_param, &notice);
+		if (notice.show)
+			tray_show_balloon(window, notice.title, notice.text);
+
+		return 0;
+
 	case WM_CLOSE:
+		if (sshui_prompt_active())
+			return 0;
+
 		hub_log(L"server quit");
+		sshconn_shutdown();
 		DestroyWindow(window);
 		return 0;
 
@@ -216,6 +233,7 @@ int wingui_run_server(HINSTANCE instance, const struct hub_request *initial_requ
 
 	hub_log(L"server start v%ls", HUB_VERSION);
 	tray_init(hub_window);
+	sshconn_init(hub_window);
 	if (initial_request)
 		queue_request(hub_window, initial_request);
 

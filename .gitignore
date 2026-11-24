@@ -1,0 +1,8 @@
+sihub.ini
+sihub.log
+known_hosts
+sihub.exe
+build/
+*.obj
+*.res
+*.o

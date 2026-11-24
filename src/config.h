@@ -12,6 +12,8 @@ struct hub_config
 	wchar_t ini_path[MAX_PATH];
 	wchar_t log_path[MAX_PATH];
 	wchar_t template_path[MAX_PATH];
+	wchar_t known_hosts_path[MAX_PATH];
+	wchar_t ssh_key_dir[MAX_PATH];
 	wchar_t win_prefix[MAX_PATH];
 	wchar_t linux_prefix[MAX_PATH];
 	wchar_t uri_template[URI_TEMPLATE_MAX];

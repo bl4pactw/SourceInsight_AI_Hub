@@ -23,3 +23,8 @@ uri=vscode://anthropic.claude-code/open?prompt={prompt}
 copy_to_clipboard=1
 ; 1 = 不真的開 URI，只寫 log（搭配 log=1 驗證設定）
 dry_run=0
+
+[connections]
+; 由系統匣 Connections → Connect to... 自動維護，也可手動編輯（不存密碼）
+;conn1=user@host
+;conn2=user@host:2222

@@ -1,4 +1,4 @@
-# SI AI Hub — v0.4
+# SI AI Hub — v0.5
 
 Source Insight 4 熱鍵 → 游標處彈出選單 → 選 3 個範本之一 → VS Code（Remote）裡的 Claude Code 輸入框出現預填 prompt。全程無 console 視窗。
 
@@ -17,7 +17,8 @@ server ─ 選單 @ SI 文字游標 ─> 範本 ─> Z:\ → Linux 路徑 ─> p
 | `sihub.exe` | 預編好的 x64 執行檔（MinGW、static、GUI subsystem） |
 | `src/` | 原始碼（模組化 Win32 C，純 ASCII，見下方「程式結構」） |
 | `CLAUDE.md` | C 程式碼規範（Claude Code / Cowork 共用） |
-| `res/` | 圖示與資源檔（`sihub.ico`、`sihub.rc`、`resource.h`） |
+| `res/` | 圖示、對話框、manifest（`sihub.ico`、`sihub.rc`、`resource.h`、`sihub.manifest`） |
+| `third_party/libssh2/` | libssh2 1.11.1 原始碼（BSD-3-Clause，見其 `COPYING`），以 WinCNG 編譯，不需 OpenSSL |
 | `macros/SiHub.em` | SI4 巨集：`SiHub_Ask`、`SiHub_Quit` |
 | `sihub.ini.example` | 設定範例（路徑對應、目標 URI、範本檔位置） |
 | `sihub_templates.txt` | 選單範本（UTF-8，可增減，最多 9 個） |
@@ -51,17 +52,34 @@ server ─ 選單 @ SI 文字游標 ─> 範本 ─> Z:\ → Linux 路徑 ─> p
 ```text
 [解釋這段程式碼]
 請解釋 {symbol}（{path} 第 {line1}-{line2} 行）……
-@{path}
 
 [追蹤定義 / 來源]
 ……
 ```
 
 - `[標題]` 須從行首開始，依序對應選單 `&1`~`&9`；內容多行、原樣送出
+- 內容最後不要以 `@路徑` 結尾：Claude 輸入框會開啟 `@` 檔案選單（顯示「No files found」）並攔截 Enter / Ctrl+Enter，導致無法直接送出
 - `#` 註解只在第一個標題之前有效（範本內的 `#define` 不受影響）；內容行以 `[` 開頭請寫 `\[`
 - 佔位符：`{path}` `{winpath}` `{file}` `{symbol}` `{line1}` `{line2}` `{line}`
 - 預設 3 個範本都要求 Claude 先回報起始行內容，用來確認 Windows/Linux 兩端是同一份 code
 - 範本檔讀不到或沒有任何 `[標題]` 時，使用 `sihub.c` 內建的英文備援範本，選單頂端會顯示灰色提示
+
+## SSH 連線（Connections）
+
+系統匣右鍵 → **Connections** 管理常駐 SSH 連線（hub 內建 libssh2，不經 `ssh.exe`，不會閃視窗）。
+
+| 操作 | 說明 |
+|---|---|
+| Connect to... | 輸入 `user@host` 或 `user@host:port`，加入清單並連線 |
+| ●／○ 清單 | ● 已連線、◔ 連線中、○ 未連線或失敗；各項子選單有 Connect / Disconnect / Run test command / Remove |
+| 密碼 | 需要時跳出密碼視窗（最多 3 次）；**密碼不存檔**，只在登入當下使用 |
+| 主機金鑰 | 第一次連線顯示 SHA256 指紋請你確認，記在 exe 旁的 `known_hosts`（OpenSSH 格式）；之後金鑰變了會拒絕連線並警告 |
+| 金鑰登入 | 自動嘗試 `%USERPROFILE%\.ssh\id_ecdsa`、`id_rsa`（無密語）；**Ed25519 金鑰不支援**（WinCNG 限制），會改用密碼 |
+| Run test command | 在遠端執行 `uname -a`、顯示 shell 與 tmux 版本，確認連線可用 |
+
+- 連線清單存在 `sihub.ini` 的 `[connections]`（`conn1=bl4@192.168.4.70`），hub 重啟後清單還在，但需重新連線
+- 連線保持到 Disconnect 或 hub 結束；每 30 秒送 keepalive，斷線時跳出提示
+- 需要 Windows 10 以上（WinCNG 的 ECDSA / ECDH）
 
 ## 系統匣圖示
 
@@ -72,7 +90,8 @@ server ─ 選單 @ SI 文字游標 ─> 範本 ─> Z:\ → Linux 路徑 ─> p
 | 右鍵 → Edit settings | 開啟 `sihub.ini` |
 | 右鍵 → Open log | 開啟 `sihub.log`（`log=1` 時才可用） |
 | 右鍵 → Open folder | 開啟 exe 所在資料夾 |
-| 右鍵 → Exit | 結束常駐 hub |
+| 右鍵 → Connections | SSH 連線管理（見上節） |
+| 右鍵 → Exit | 結束常駐 hub（會先中斷所有 SSH 連線） |
 
 Explorer 重新啟動後圖示會自動補回；不想顯示可設 `[general] tray_icon=0`（改設定後需重啟 hub）。
 
@@ -88,6 +107,9 @@ main.c ── 命令列解析、決定 client / server
        ├─ preprompt.c  範本檔解析、Z:\ → Linux 路徑、佔位符替換 → prompt（不碰 UI）
        ├─ target.c     prompt → 剪貼簿 + URI 編碼 + 開啟（不彈視窗，回傳結果）
        └─ winutil.c    MessageBox、ShellExecute、剪貼簿
+       ├─ sshui.c      連線清單選單、密碼 / 主機金鑰對話框、結果顯示
+       │    └─ sshconn.c   連線管理：每條連線一個 worker thread、工作佇列、清單存 ini
+       │         └─ sshclient.c  libssh2 同步封裝：連線、known_hosts、登入、執行指令（不含 Win32 型別，可在 Linux 測試）
 共用：config.c（sihub.ini）、hub_log.c、wstr.c（wide_buf / UTF-8 / 字串工具）、hub.h（struct hub_request、版本）
 ```
 
@@ -97,6 +119,7 @@ main.c ── 命令列解析、決定 client / server
 | 新的送出目標（其他 AI app、MCP） | `target.c` |
 | 選單、系統匣、視窗行為 | `wingui.c` / `tray.c` |
 | 新設定項 | `config.h` / `config.c` |
+| 遠端操作（例如 tmux 送 prompt） | 透過 `sshconn_exec_async()`，不直接碰 libssh2 |
 
 ## 設計重點
 

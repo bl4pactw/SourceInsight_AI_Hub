@@ -132,6 +132,15 @@ char *wstr_to_utf8(const wchar_t *text)
 	return utf8_text;
 }
 
+void wstr_from_utf8(const char *text, wchar_t *dest, size_t dest_chars)
+{
+
+	if (!MultiByteToWideChar(CP_UTF8, 0, text, -1, dest, (int)dest_chars))
+		dest[0] = 0;
+
+	dest[dest_chars - 1] = 0;
+}
+
 static wchar_t *utf8_to_wstr(const char *utf8_text)
 {
 	wchar_t *wide_text;

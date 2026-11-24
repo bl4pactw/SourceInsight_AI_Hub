@@ -4,6 +4,9 @@
 
 #define INI_PATH_FMT            L"%ls\\sihub.ini"
 #define LOG_PATH_FMT            L"%ls\\sihub.log"
+#define KNOWN_HOSTS_PATH_FMT    L"%ls\\known_hosts"
+#define SSH_KEY_DIR_PATH_FMT    L"%ls\\.ssh"
+#define USER_PROFILE_ENV        L"USERPROFILE"
 #define EXE_DIR_FILE_PATH_FMT   L"%ls\\%ls"
 #define DEFAULT_TEMPLATE_PATH   L"sihub_templates.txt"
 
@@ -46,6 +49,7 @@ static void resolve_template_path(const wchar_t *template_setting)
 
 void config_init(void)
 {
+	wchar_t user_profile[MAX_PATH];
 	wchar_t *last_backslash;
 
 	GetModuleFileNameW(NULL, g_config.exe_dir, MAX_PATH);
@@ -55,6 +59,9 @@ void config_init(void)
 
 	wstr_format(g_config.ini_path, MAX_PATH, INI_PATH_FMT, g_config.exe_dir);
 	wstr_format(g_config.log_path, MAX_PATH, LOG_PATH_FMT, g_config.exe_dir);
+	wstr_format(g_config.known_hosts_path, MAX_PATH, KNOWN_HOSTS_PATH_FMT, g_config.exe_dir);
+	if (GetEnvironmentVariableW(USER_PROFILE_ENV, user_profile, MAX_PATH))
+		wstr_format(g_config.ssh_key_dir, MAX_PATH, SSH_KEY_DIR_PATH_FMT, user_profile);
 }
 
 void config_load(void)

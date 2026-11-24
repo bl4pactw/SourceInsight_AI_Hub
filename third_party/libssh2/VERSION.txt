@@ -1,0 +1,1 @@
+libssh2 1.11.1 (https://github.com/libssh2/libssh2/releases/tag/libssh2-1.11.1), unmodified src/ and include/. Built with LIBSSH2_WINCNG  and LIBSSH2_ECDSA_WINCNG (Windows CNG crypto incl. ECDSA/ECDH, Windows 10+; no OpenSSL). Ed25519 keys are not supported by the WinCNG backend.

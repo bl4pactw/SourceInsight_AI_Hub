@@ -2,13 +2,15 @@
 #include <shellapi.h>
 #include "config.h"
 #include "hub_log.h"
+#include "sshui.h"
 #include "winutil.h"
 #include "wstr.h"
 #include "../res/resource.h"
 
-#define WM_HUB_TRAY             (WM_APP + 2)
 #define TRAY_ICON_ID            1
 #define TRAY_TIP_MAX            128
+#define TRAY_INFO_TITLE_MAX     64
+#define TRAY_INFO_TEXT_MAX      256
 #define TASKBAR_CREATED_MSG     L"TaskbarCreated"
 
 #define TRAY_ID_TITLE           200
@@ -80,6 +82,7 @@ static HMENU create_tray_menu(void)
 {
 	const struct hub_config *config = config_get();
 	wchar_t title_text[TRAY_TIP_MAX];
+	HMENU connections_menu;
 	HMENU menu;
 
 	menu = CreatePopupMenu();
@@ -89,6 +92,13 @@ static HMENU create_tray_menu(void)
 	wstr_format(title_text, TRAY_TIP_MAX, L"%ls v%ls", HUB_TITLE, HUB_VERSION);
 	AppendMenuW(menu, MF_STRING | MF_GRAYED, TRAY_ID_TITLE, title_text);
 	AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
+	connections_menu = sshui_create_connections_menu();
+
+	if (connections_menu) {
+		AppendMenuW(menu, MF_POPUP | MF_STRING, (UINT_PTR)connections_menu, L"C&onnections");
+		AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
+	}
+
 	AppendMenuW(menu, MF_STRING, TRAY_ID_EDIT_TEMPLATES, L"Edit &templates");
 	AppendMenuW(menu, MF_STRING, TRAY_ID_EDIT_SETTINGS, L"Edit &settings");
 	AppendMenuW(menu, MF_STRING | (config->log_enabled ? 0 : MF_GRAYED), TRAY_ID_OPEN_LOG, L"Open &log");
@@ -103,6 +113,9 @@ static HMENU create_tray_menu(void)
 static void run_tray_command(HWND hub_window, int command_id)
 {
 	const struct hub_config *config = config_get();
+
+	if (sshui_run_command(hub_window, command_id))
+		return;
 
 	switch (command_id) {
 	case TRAY_ID_EDIT_TEMPLATES: winutil_open_path(config->template_path); break;
@@ -153,4 +166,19 @@ BOOL tray_handle_message(HWND hub_window, UINT message, LPARAM l_param)
 	}
 
 	return FALSE;
+}
+
+void tray_show_balloon(HWND hub_window, const wchar_t *title, const wchar_t *text)
+{
+	NOTIFYICONDATAW tray_data;
+
+	if (!g_tray_icon_added)
+		return;
+
+	fill_tray_data(hub_window, &tray_data);
+	tray_data.uFlags = NIF_INFO;
+	tray_data.dwInfoFlags = NIIF_INFO;
+	wstr_copy(tray_data.szInfoTitle, TRAY_INFO_TITLE_MAX, title);
+	wstr_copy(tray_data.szInfo, TRAY_INFO_TEXT_MAX, text);
+	Shell_NotifyIconW(NIM_MODIFY, &tray_data);
 }

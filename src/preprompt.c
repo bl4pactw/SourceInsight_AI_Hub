@@ -24,8 +24,7 @@ static const struct
 	{
 		.label = L"Explain this code",
 		.body = L"Explain {symbol} ({path}, lines {line1}-{line2}): purpose, inputs/outputs, key flow and caveats.\n"
-				L"First quote line {line1} as you see it, to confirm we are looking at the same source tree.\n\n"
-				L"@{path}",
+				L"First quote line {line1} as you see it, to confirm we are looking at the same source tree.",
 	},
 	{
 		.label = L"Trace definition / origin",
